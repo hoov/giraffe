@@ -502,7 +502,7 @@ create_dashboards = ->
             parts = item.split(".")
             metric.alias = parts[parts.length-2]
             console.log(metric.alias)
-            metric.targets = (item + "." + part for part in ["lower", "mean", "upper_90"])
+            metric.targets = ("alias(" + item + "." + part + ", '" + part + "')" for part in ["lower", "mean", "upper_90"])
 
             these_metrics.push(metric)
             console.log(item)

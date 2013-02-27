@@ -695,7 +695,7 @@
           _results = [];
           for (_j = 0, _len1 = _ref.length; _j < _len1; _j++) {
             part = _ref[_j];
-            _results.push(item + "." + part);
+            _results.push("alias(" + item + "." + part + ", '" + part + "')");
           }
           return _results;
         })();
