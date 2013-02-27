@@ -2,13 +2,13 @@
 default_period = 1440
 scheme = 'classic9' if scheme is undefined
 period = default_period
-dashboard = dashboards[0]
-metrics = dashboard['metrics']
-description = dashboard['description']
-refresh = dashboard['refresh']
 refreshTimer = null
 auth = auth ? false
 graphs = []
+dashboard = null
+metrics = null
+description = null
+refresh = null
 
 dataPoll = ->
   for graph in graphs
@@ -469,7 +469,50 @@ $(window).bind 'hashchange', (e) ->
     changeDashboard(dash)
   $('.timepanel a.range[href="#' + timeFrame + '"]').click()
 
+
+Array::unique = ->
+    output = {}
+    output[@[key]] = @[key] for key in [0...@length]
+    value for key, value of output
+
+create_dashboards = ->
+
+    deferred = $.ajax
+      dataType: 'json'
+      url: "http://graphite.dexilab.acrobat.com/metrics/index.json"
+    deferred.done (result) =>
+        dashboard = dashboards[0]
+
+        # FIXME: This is super inefficient
+        # Filter out the ones we want
+        result = (item for item in result when /stats\.timers/.test(item))
+        # Get rid of the trailing crap
+        result = ((item.split ".")[0..-2].join(".") for item in result)
+        # And filter again
+        result = result.unique()
+
+
+        metrics = []
+
+        for item in result
+            metric = {renderer: "area", interpolation: "cardinal", unstack: true}
+                      
+            parts = item.split(".")
+            metric.alias = parts[parts.length-2]
+            console.log(metric.alias)
+            metric.targets = (item + "." + part for part in ["lower", "mean", "upper_90"])
+
+            metrics.push(metric)
+            console.log(item)
+
+        #metrics = dashboard['metrics']
+        description = dashboard['description']
+        refresh = dashboard['refresh']
+
+        $(window).trigger( 'hashchange' )
+        init()
+
 $ ->
-  $(window).trigger( 'hashchange' )
-  init()
+  create_dashboards()
+  #init()
 
