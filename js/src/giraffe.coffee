@@ -1,10 +1,11 @@
 # giraffe vars
-default_period = 1440
+default_period = 1
 scheme = 'classic9' if scheme is undefined
 period = default_period
 refreshTimer = null
 auth = auth ? false
 graphs = []
+dashboards = []
 dashboard = null
 metrics = null
 description = null
@@ -481,8 +482,9 @@ create_dashboards = ->
       dataType: 'json'
       url: "http://graphite.dexilab.acrobat.com/metrics/index.json"
     deferred.done (result) =>
-        dashboard = dashboards[0]
 
+        this_dashboard = {name: "Timers", description: "Random timing data"}
+        
         # FIXME: This is super inefficient
         # Filter out the ones we want
         result = (item for item in result when /stats\.timers/.test(item))
@@ -492,7 +494,7 @@ create_dashboards = ->
         result = result.unique()
 
 
-        metrics = []
+        these_metrics = []
 
         for item in result
             metric = {renderer: "area", interpolation: "cardinal", unstack: true}
@@ -502,17 +504,20 @@ create_dashboards = ->
             console.log(metric.alias)
             metric.targets = (item + "." + part for part in ["lower", "mean", "upper_90"])
 
-            metrics.push(metric)
+            these_metrics.push(metric)
             console.log(item)
 
-        #metrics = dashboard['metrics']
+        this_dashboard.metrics = these_metrics
+
+        dashboard = this_dashboard
+        dashboards[0] = dashboard
+
+        metrics = dashboard['metrics']
         description = dashboard['description']
         refresh = dashboard['refresh']
 
-        $(window).trigger( 'hashchange' )
+        $(window).trigger('hashchange')
         init()
 
 $ ->
   create_dashboards()
-  #init()
-
