@@ -200,6 +200,9 @@ createGraph = (anchor, metric) ->
       @legend = new Rickshaw.Graph.Legend
         graph: graph
         element: $("#{anchor} .legend")[0]
+      highlighter = new Rickshaw.Graph.Behavior.Series.Highlight
+        graph: graph
+        legend: @legend
       shelving = new Rickshaw.Graph.Behavior.Series.Toggle
         graph: graph
         legend: @legend
@@ -207,6 +210,7 @@ createGraph = (anchor, metric) ->
         @annotator = new GiraffeAnnotate
           graph: graph
           element: $("#{anchor} .timeline")[0]
+
       refreshSummary(@)
 
   
@@ -476,42 +480,61 @@ Array::unique = ->
     output[@[key]] = @[key] for key in [0...@length]
     value for key, value of output
 
+String::rsplit = (sep, maxsplit) ->
+   split = @split(sep)
+   return split unless maxsplit
+   
+   return [split.slice(0, -maxsplit).join(sep)].concat(split.slice(-maxsplit))
+
+make_dashboard = (namespace, timers) ->
+        this_dashboard =
+            name: "Timers: " + namespace
+            description: "Timing data for the package " + namespace
+            refresh: 1000
+
+        these_metrics = []
+        for timer in timers
+            metric =
+                renderer: "area"
+                interpolation: "basis"
+                unstack: true
+                      
+            parts = timer.split(".")
+            metric.alias = parts[parts.length-1]
+            #console.log(metric.alias)
+            metric.targets = ("alias(" + namespace + "." + timer + "." + part + ", '" + part + "')" for part in ["lower", "mean", "upper_90"])
+
+            these_metrics.push(metric)
+            #console.log(metric)
+
+        this_dashboard.metrics = these_metrics
+        return this_dashboard
+
+
 create_dashboards = ->
 
     deferred = $.ajax
       dataType: 'json'
-      url: "http://graphite.dexilab.acrobat.com/metrics/index.json"
+      url: "#{graphite_url}/metrics/index.json"
     deferred.done (result) =>
-
-        this_dashboard = {name: "Timers", description: "Random timing data"}
-        
         # FIXME: This is super inefficient
-        # Filter out the ones we want
-        result = (item for item in result when /stats\.timers/.test(item))
-        # Get rid of the trailing crap
-        result = ((item.split ".")[0..-2].join(".") for item in result)
-        # And filter again
-        result = result.unique()
-
-
-        these_metrics = []
-
+        # Transform the list into a list of tuples (namespace, timer)
+        result = (item.rsplit(".", 2)[0..-2] for item in result when /stats\.timers/.test(item))
+        # Now, let's construct a dict to map namespace: timer. Again, super inefficient.
+        namespace_dict = {}
         for item in result
-            metric = {renderer: "area", interpolation: "cardinal", unstack: true}
-                      
-            parts = item.split(".")
-            metric.alias = parts[parts.length-2]
-            console.log(metric.alias)
-            metric.targets = ("alias(" + item + "." + part + ", '" + part + "')" for part in ["lower", "mean", "upper_90"])
+            key = item[0]
+            value = item[1]
+            namespace_dict[key] ?= new Array()
+            if value not in namespace_dict[key]
+                namespace_dict[key].push(value)
+        #console.log(namespace_dict)
 
-            these_metrics.push(metric)
-            console.log(item)
+        for own k, v of namespace_dict
+            this_dashboard = make_dashboard(k, v)
+            dashboards.push(this_dashboard)
 
-        this_dashboard.metrics = these_metrics
-
-        dashboard = this_dashboard
-        dashboards[0] = dashboard
-
+        dashboard = dashboards[0]
         metrics = dashboard['metrics']
         description = dashboard['description']
         refresh = dashboard['refresh']
