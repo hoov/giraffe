@@ -486,7 +486,7 @@ String::rsplit = (sep, maxsplit) ->
    
    return [split.slice(0, -maxsplit).join(sep)].concat(split.slice(-maxsplit))
 
-make_dashboard = (namespace, timers) ->
+make_timer_dashboard = (namespace, timers) ->
         this_dashboard =
             name: "Timers: " + namespace
             description: "Timing data for the package " + namespace
@@ -510,6 +510,65 @@ make_dashboard = (namespace, timers) ->
         this_dashboard.metrics = these_metrics
         return this_dashboard
 
+make_counter_dashboard = (namespace, counters) ->
+        this_dashboard =
+            name: "Counters: " + namespace
+            description: "Counter data for the package " + namespace
+            refresh: 1000
+
+        these_metrics = []
+        for counter in counters
+            metric =
+                renderer: "area"
+                interpolation: "basis"
+                      
+            metric.alias = counter
+            metric.target = "alias(" + namespace + "." + counter + ", '" + counter + "')"
+
+            these_metrics.push(metric)
+
+        this_dashboard.metrics = these_metrics
+        return this_dashboard
+
+make_gauge_dashboard = (namespace, gauges) ->
+        this_dashboard =
+            name: "Gauges: " + namespace
+            description: "Gauge data for the package " + namespace
+            refresh: 1000
+
+        these_metrics = []
+        for gauge in gauges
+            metric =
+                renderer: "area"
+                interpolation: "basis"
+                      
+            metric.alias = gauge[0] + "." + gauge[1]
+            metric.target = "alias(" + namespace + "." + gauge[0] + "." + gauge[1] + ", '" + gauge[1] + "')"
+
+            these_metrics.push(metric)
+
+        this_dashboard.metrics = these_metrics
+        return this_dashboard
+
+list_to_namespace_dict = (items) ->
+    namespace_dict = {}
+    for item in items
+        key = item[0]
+        value = item[1]
+        namespace_dict[key] ?= new Array()
+        if value not in namespace_dict[key]
+            namespace_dict[key].push(value)
+    return namespace_dict
+
+list_to_namespace_dict_g = (items) ->
+    namespace_dict = {}
+    for item in items
+        key = item[0]
+        value = item[1..2]
+        namespace_dict[key] ?= new Array()
+        if value not in namespace_dict[key]
+            namespace_dict[key].push(value)
+    return namespace_dict
 
 create_dashboards = ->
 
@@ -519,19 +578,25 @@ create_dashboards = ->
     deferred.done (result) =>
         # FIXME: This is super inefficient
         # Transform the list into a list of tuples (namespace, timer)
-        result = (item.rsplit(".", 2)[0..-2] for item in result when /stats\.timers/.test(item))
+        timers = (item.rsplit(".", 2)[0..-2] for item in result when /stats\.timers/.test(item))
+        counters = (item.rsplit(".", 1)[0..-1] for item in result when /stats\.(?!(gauges|statsd|timers))/.test(item))
+        gauges = (item.rsplit(".", 2)[0..-1] for item in result when /stats\.gauges/.test(item))
+        console.log(gauges)
         # Now, let's construct a dict to map namespace: timer. Again, super inefficient.
-        namespace_dict = {}
-        for item in result
-            key = item[0]
-            value = item[1]
-            namespace_dict[key] ?= new Array()
-            if value not in namespace_dict[key]
-                namespace_dict[key].push(value)
-        #console.log(namespace_dict)
+        timers_dict = list_to_namespace_dict(timers)
+        counters_dict = list_to_namespace_dict(counters)
+        gauges_dict = list_to_namespace_dict_g(gauges)
 
-        for own k, v of namespace_dict
-            this_dashboard = make_dashboard(k, v)
+        for own k, v of timers_dict
+            this_dashboard = make_timer_dashboard(k, v)
+            dashboards.push(this_dashboard)
+
+        for own k, v of counters_dict
+            this_dashboard = make_counter_dashboard(k, v)
+            dashboards.push(this_dashboard)
+
+        for own k, v of gauges_dict
+            this_dashboard = make_gauge_dashboard(k, v)
             dashboards.push(this_dashboard)
 
         dashboard = dashboards[0]
